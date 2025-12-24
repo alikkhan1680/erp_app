@@ -56,7 +56,8 @@ INSTALLED_APPS = [
 
     #local app
     'accounts',
-    'auth_module'
+    'auth_module',
+    'user_activity',
 ]
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
