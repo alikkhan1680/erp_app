@@ -1,50 +1,30 @@
-from django.shortcuts import render
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import JsonResponse
-
-from auth_module.utilits import verify_turnstile
-from .models import CustomUser
+from auth_module.serializers import  RegisterOwnerSerializer
 from .services import UserService, RoleService
-from .utils import validate_password
+
 
 class RegisterOwnerView(APIView):
-    def get(self, request):
-        return Response({
-            "message": "Bu endpoint faqat POST uchun ishlaydi.",
-            "description": "User yaratish uchun telefon raqam, fullname va password yuboring",
-            "required_body": {
-                "full_name": "Ism Familiya",
-                "primary_mobile": "+998901234567",
-                "password": "StrongPass@123",
-            }
-        }, status=status.HTTP_200_OK)
-
+    swagger_auto_schema(request_body=RegisterOwnerSerializer)
     def post(self, request):
+        serializer = RegisterOwnerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        data = request.data
-        password = data.get('password')
-        phone_number = data.get('primary_mobile')
-        full_name = data.get('full_name')
+        try:
+            user = UserService.update_existing_user(**serializer.validated_data)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        validate_password((password))
-
-        user = UserService.register_user(
-            full_name=full_name,
-            primary_mobile=phone_number,
-            password=password
-        )
         return Response(
-            {"msg":f"{user.username} mufaqiyatli yaratilindi"},
-                  status=status.HTTP_201_CREATED
+            {"msg": f"{user.username} muvaffaqiyatli yangilandi"},
+            status=status.HTTP_200_OK
         )
 
 
 class ChangeUserRoleView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request, user_id):
         new_role = request.data.get("new_role")

@@ -9,16 +9,15 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, serializers
 from django.utils import timezone
 from datetime import timedelta
 import random
 
-# from setuptools.package_index import user_agent
 
 from .models import OTP, LoginActivity
 from accounts.models import CustomUser
-from .serializers import SignUpSerializers, OTPVerifyserializers, ResentOTPSerializers, LoginSerializer, TwoFAInitiateSerializers, TwoFAVerifySerializer
+from .serializers import SignupSerializer, OTPVerifyserializers, ResentOTPSerializers, LoginSerializer, TwoFAInitiateSerializers, TwoFAVerifySerializer
 from .utilits import verify_turnstile
 from .services.twofa_service import TwoFAService
 
@@ -32,11 +31,14 @@ class SignUPView(APIView):
     def get(self, request):
         return Response({
             "message": "Bu endpoint faqat POST uchun. Malumot yuboring: full_name va primary_mobile",
-            "cf-turnstile-response": "You can write anything you want right now, it's not in the works yet."
+            "cf-turnstile-response": "You can write anything you want right now, it's not in the works yet.",
+                "full_name": "full name",
+                "primary_mobile": "+998909999999"
+
         })
-    @swagger_auto_schema(request_body=SignUpSerializers)
+    @swagger_auto_schema(request_body=SignupSerializer)
     def post(self, request):
-        serializer = SignUpSerializers(data=request.data)
+        serializer = SignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         phone_number = serializer.validated_data.get('primary_mobile')
@@ -45,7 +47,7 @@ class SignUPView(APIView):
         # user yaratish yoki topish
         user, created = CustomUser.objects.get_or_create(
             primary_mobile=phone_number,
-            defaults={'full_name': full_name, 'username': phone_number}
+            defaults={'full_name': full_name, "username": full_name}
         )
 
         # eski OTPlarni o‘chirish
@@ -180,32 +182,34 @@ class ResentOTPView(APIView):
 
 
 
+# views.py
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
-    def get(self, request):
-        return Response(
-            {
-                "username_or_phone": "user@example.com",
-                "password": "userpassword",
-                "remember_me": True,
-                "cf-turnstile-response": "You can write anything you want right now, it's not in the works yet."
-            }
 
-        )
+    def get(self, request):
+        return Response({
+  "username_or_phone": "user@example.com",
+  "password": "userpassword",
+  "remember_me": True,
+  "cf-turnstile-response": "TOKEN_HERE"
+})
 
     @swagger_auto_schema(request_body=LoginSerializer)
     def post(self, request):
-        token = request.data.get("cf-turnstile-response")
-        if not token or not verify_turnstile(token, request.META.get('REMOTE_ADDR')):
-            return Response({"error": "Human verification faild"}, status=400)
-
+        print("Request data:", request.data)  # Step 1
 
         serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except serializers.ValidationError as e:
+            print("Serializer error:", e)  # Step 2
+            raise
+
         user = serializer.validated_data['user']
         remember_me = serializer.validated_data['remember_me']
+        print("User found:", user)  # Step 3
 
-        #token yaratamiz
+        # 🔹 Token yaratish
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
@@ -234,8 +238,9 @@ class LoginView(APIView):
         return ip
 
 
+
 class LogouteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    # permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         try:

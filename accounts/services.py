@@ -6,8 +6,28 @@ from .models import CustomUser
 class UserService:
 
     @staticmethod
-    def register_user(**data):
-        return CustomUser.objects.create_user_with_role(**data)
+    def update_existing_user(**data):
+        """
+        OTP orqali yaratilgan userni topib update qiladi.
+        Agar topilmasa, xatolik beradi.
+        """
+        primary_mobile = data.get("primary_mobile")
+        user = CustomUser.objects.filter(primary_mobile=primary_mobile).first()
+
+        if not user:
+            raise ValueError("OTP orqali ro'yxatdan o'tmagan foydalanuvchi")
+
+        password = data.pop("password", None)
+
+        # Mavjud userni update qilish (final signup)
+        for key, value in data.items():
+            setattr(user, key, value)
+
+        if password:
+            user.set_password(password)
+        user.save()
+
+        return user
 
 
 class RoleService:
