@@ -1,3 +1,6 @@
+from datetime import timedelta
+from uuid import uuid4
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
@@ -23,19 +26,13 @@ class CustomUser(AbstractUser):
     email_verified = models.BooleanField(default=False)
     phone_verified = models.BooleanField(default=False)
     user_id_number = models.CharField(max_length=20,unique=True,blank=True)
-    two_factor_enebled = models.BooleanField(default=False)
-    two_factor_secret = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 
     is_2fa_enabled = models.BooleanField(default=False)
     two_fa_secret = models.CharField(max_length=255, null=True, blank=True)
-    two_fa_type = models.CharField(
-        max_length=20,
-        choices=(('AUTHENTICATOR', 'Authenticator'), ('SMS', 'SMS')),
-        default='AUTHENTICATOR'
-    )
+    two_fa_type = models.CharField(max_length=20,choices=(('AUTHENTICATOR', 'Authenticator'), ('SMS', 'SMS')),default='AUTHENTICATOR')
     backup_codes = models.JSONField(default=list, blank=True)
 
     # optional: so‘nggi muvaffaqiyatli 2FA tekshiruvi
@@ -60,6 +57,21 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class TwoALoginSession(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    session_id = models.UUIDField(default=uuid4, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_verified = models.BooleanField(default=False)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at +timedelta(minutes=5)
+
+    def __str__(self):
+        return f"{self.user} - {self.session_id}"
+
+
 
 
 

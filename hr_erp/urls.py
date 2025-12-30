@@ -5,13 +5,13 @@ from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 
 schema_view = get_schema_view(
-   openapi.Info(
-      title="My Project API",
-      default_version='v1',
-      description="Loyiha API documentation",
-   ),
-   public=True,
-   permission_classes=(permissions.AllowAny,),
+    openapi.Info(
+        title="My Project API",
+        default_version='v1',
+        description="Loyiha API documentation",
+    ),
+    public=True,
+    permission_classes=(permissions.IsAuthenticated,),  # agar token talab qilinsa
 )
 
 urlpatterns = [

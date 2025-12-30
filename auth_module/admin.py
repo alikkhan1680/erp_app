@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OTP
+from .models import OTP, LoginActivity
 
 
 
@@ -10,3 +10,4 @@ class OTPAdmin(admin.ModelAdmin):
     search_fields = ('phone_number', 'otp_code')
     readonly_fields = ('created_at',)
 
+admin.site.register(LoginActivity)

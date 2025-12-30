@@ -1,20 +1,22 @@
+from functools import partial
+
+import pyotp
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from requests import session
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions, serializers
+from rest_framework import status, permissions, serializers, generics
 from django.utils import timezone
 from datetime import timedelta
 import random
-
-
 from .models import OTP, LoginActivity
-from accounts.models import CustomUser
-from .serializers import SignupSerializer, RefreshTokenSerializers, OTPVerifyserializers, ResentOTPSerializers, LoginSerializer, TwoFAInitiateSerializers, TwoFAVerifySerializer
+from accounts.models import CustomUser, TwoALoginSession
+from .serializers import (
+    Enable2FASerializer, SignupSerializer, RefreshTokenSerializers,
+    OTPVerifyserializers, ResentOTPSerializers, LoginSerializer,
+    TwoFACodeVerifySerializer, TwoFABackupVerifySerializer )
 from .utilits import verify_turnstile
-from .services.twofa_service import TwoFAService
 
 MAX_ATTEMPTS = 3
 BLOCK_MINUTES = 15
@@ -24,7 +26,7 @@ OTP_EXPIRY_MINUTES = 5
 # SIGNUP VIEW
 class SignUPView(APIView):
 
-    @swagger_auto_schema(request_body=SignupSerializer)
+    @swagger_auto_schema(request_body=SignupSerializer, security=[])
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -57,7 +59,7 @@ class SignUPView(APIView):
 
 # VERIFY OTP VIEW
 class OTPVerifyView(APIView):
-    @swagger_auto_schema(request_body=OTPVerifyserializers)
+    @swagger_auto_schema(request_body=OTPVerifyserializers, security=[])
     def post(self, request):
         serializer = OTPVerifyserializers(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -115,7 +117,7 @@ class OTPVerifyView(APIView):
 
 class ResentOTPView(APIView):
 
-    @swagger_auto_schema(request_body=ResentOTPSerializers)
+    @swagger_auto_schema(request_body=ResentOTPSerializers, security=[])
     def post(self, request):
         token = request.data.get("cf-turnstile-response")
         if not token or not verify_turnstile(token, request.META.get('REMOTE_ADDR')):
@@ -169,28 +171,52 @@ class LoginView(APIView):
 
     def get(self, request):
         return Response({
-  "username_or_phone": "user@example.com",
-  "password": "userpassword",
-  "remember_me": True,
-  "cf-turnstile-response": "TOKEN_HERE"
-})
+            "username_or_phone": "user@example.com",
+            "password": "userpassword",
+            "remember_me": True,
+            "cf-turnstile-response": "TOKEN_HERE"
+        })
 
-    @swagger_auto_schema(request_body=LoginSerializer)
+    @swagger_auto_schema(request_body=LoginSerializer, security=[])
     def post(self, request):
-        print("Request data:", request.data)  # Step 1
-
         serializer = LoginSerializer(data=request.data)
-        try:
-            serializer.is_valid(raise_exception=True)
-        except serializers.ValidationError as e:
-            print("Serializer error:", e)  # Step 2
-            raise
+        serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
         remember_me = serializer.validated_data['remember_me']
-        print("User found:", user)  # Step 3
 
-        # 🔹 Token yaratish
+        # ================================
+        # 🔐 2FA YOQILGANMI? Shuni tekshiramiz
+        # ================================
+        if getattr(user, "is_2fa_enabled", False):
+            # ❗ Session yaratish
+            session = TwoALoginSession.objects.create(user=user)
+
+            # 🔹 Code generate qilish
+            if user.two_fa_type == "AUTHENTICATOR":
+                import pyotp
+                totp = pyotp.TOTP(user.two_fa_secret)
+                generated_code = totp.now()  # dev/testing uchun
+            elif user.two_fa_type == "SMS":
+                generated_code = str(random.randint(100000, 999999))
+                # send_sms(user.primary_mobile, generated_code)  # Production-da
+
+            LoginActivity.objects.create(
+                user=user,
+                ip_address=self.get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+
+            return Response({
+                "message": "2FA verification required",
+                "2fa_required": True,
+                "session_id": str(session.session_id),
+                "generated_code": generated_code  # faqat dev/testing
+            }, status=status.HTTP_200_OK)
+
+        # ================================
+        # 🔓 2FA yoqilmagan → oddiy login ishlaydi
+        # ================================
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
@@ -207,7 +233,8 @@ class LoginView(APIView):
         return Response({
             "access": access_token,
             "refresh": refresh_token,
-            "user_role": user.user_role
+            "user_role": user.user_role,
+            "2fa_required": False
         }, status=status.HTTP_200_OK)
 
     def get_client_ip(self, request):
@@ -220,8 +247,10 @@ class LoginView(APIView):
 
 
 
+
+
 class LogouteView(APIView):
-    # permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         try:
@@ -236,7 +265,7 @@ class LogouteView(APIView):
 class RefreshTokenView(APIView):
     permission_classes = [permissions.AllowAny]
 
-    @swagger_auto_schema(request_body=RefreshTokenSerializers)
+    @swagger_auto_schema(request_body=RefreshTokenSerializers, security=[])
     def post(self, request):
         serializer = RefreshTokenSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -250,67 +279,120 @@ class RefreshTokenView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class TwoFAEnableInitiateView(APIView):
-    permission_classes = [IsAuthenticated]
-    @swagger_auto_schema(request_body=TwoFAInitiateSerializers)
-    def post(self, request):
-        user = request.user
 
-        if user.is_2fa_enabled:
-            return Response({"message": "2FA already enabled"}, status=400)
+class Enable2FAView(generics.UpdateAPIView):
+    serializer_class = Enable2FASerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-        secret = TwoFAService.generate_secret()
-        user.two_fa_secret = secret
-        user.save(update_fields=["two_fa_secret"])
-
-        qr_url = TwoFAService.generate_qr_uri(user.email, secret, app_name="MyApp")
-
-        serializer = TwoFAInitiateSerializers({"qr_url": qr_url, "secret": secret})
-        return Response(serializer.data)
-
-
-class TwoFAEnableVerifyView(APIView):
-    permission_classes = [IsAuthenticated]
-    @swagger_auto_schema(request_body=TwoFAVerifySerializer)
-    def post(self, request):
-        user = request.user
-        serializer = TwoFAVerifySerializer(data=request.data)
+    def get_object(self):
+        return self.request.user
+    @swagger_auto_schema(request_body=Enable2FASerializer, security=[])
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        code = serializer.validated_data["code"]
-
-        success, result = TwoFAService.enable_2fa(user, code)
-        if not success:
-            return Response({"message": result}, status=400)
+        serializer.save()
 
         return Response({
             "message": "2FA enabled successfully",
-            "backup_codes": result  # foydalanuvchiga ko‘rsatish uchun
+            "backup_codes": serializer.instance.backup_codes
         })
 
 
 
-class Login2FAVerifyView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-    # @swagger_auto_schema(request_body=JWTAuthentication)
+class TwoFAVerifyBackupView(APIView):
+    permission_classes = [permissions.AllowAny]
+    def get(self, request):
+        return Response({
+              "session_id": "uuid-from-login-response",
+              "backup_code": "ABC123"
+            })
+
+    @swagger_auto_schema(request_body=TwoFABackupVerifySerializer, security=[])
     def post(self, request):
-        user = request.user
-        code = request.data.get("code")
+        serializer = TwoFABackupVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if not user.is_2fa_enabled:
-            return Response({"message": "2FA not enabled"}, status=400)
+        session_id = serializer.validated_data["session_id"]
+        backup_code = serializer.validated_data["backup_code"]
 
-        valid = TwoFAService.verify_totp_code(user.two_fa_secret, code)
-        if not valid:
-            return Response({"message": "Invalid 2FA code"}, status=400)
+        try:
+            session = TwoALoginSession.objects.get(session_id=session_id, is_verified=False)
+        except TwoALoginSession.DoesNotExist:
+            return Response({"error": "Invalid or expired session"}, status=400)
 
-        # muvaffaqiyatli → JWT qaytarish
+        if session.is_expired():
+            return Response({"error": "session expired"}, status=400)
+
+        user = session.user
+
+        if backup_code not in user.backup_codes:
+            return  Response({"error": "Invalid backup code"}, status=400)
+
+
+        user.backup_codes.remove(backup_code)
+        user.save()
+
+
         refresh = RefreshToken.for_user(user)
+
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
-            "message": "2FA login successful"
+            "message": "Login successful via backup code"
+        }, status=200)
+
+class TwoFAVerifyCodeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({
+            "session_id": "uuid-from-login-response",
+            "code": "123456"
         })
+
+    @swagger_auto_schema(request_body=TwoFACodeVerifySerializer, security=[])
+    def post(self, request):
+        serializer = TwoFACodeVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        session_id = serializer.validated_data["session_id"]
+        code = serializer.validated_data["code"]
+
+        # 🔹 Sessionni olish
+        try:
+            session = TwoALoginSession.objects.get(session_id=session_id, is_verified=False)
+        except TwoALoginSession.DoesNotExist:
+            return Response({"error": "Invalid or expired session"}, status=400)
+
+        if session.is_expired():
+            return Response({"error": "Expired session"}, status=400)
+
+        user = session.user
+
+        # 🔹 Code verify qilish
+        if user.two_fa_type == "AUTHENTICATOR":
+            import pyotp
+            totp = pyotp.TOTP(user.two_fa_secret)
+            if not totp.verify(code, valid_window=6):
+                return Response({"error": "Invalid 2FA code"}, status=400)
+        elif user.two_fa_type == "SMS":
+            # TODO: SMS code tekshirish logikasi
+            return Response({"error": "SMS verification not implemented yet"}, status=400)
+
+        # 🔹 Sessionni tasdiqlash
+        session.is_verified = True
+        session.save()
+
+        # 🔹 Token yaratish
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "message": "Login successful"
+        }, status=200)
+
 
 
 

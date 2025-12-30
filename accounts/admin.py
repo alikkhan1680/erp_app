@@ -1,10 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, TwoALoginSession
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('username', 'full_name', 'primary_mobile', 'user_role', 'is_staff', 'is_active')
+    list_display = ('username', 'full_name', 'primary_mobile',
+                    'user_role', 'is_staff', 'is_active', 'is_2fa_enabled',
+                    'two_fa_secret', 'two_fa_type', 'backup_codes')
+
     list_filter = ('user_role', 'is_staff', 'is_active')
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
@@ -22,3 +25,5 @@ class CustomUserAdmin(UserAdmin):
     ordering = ('username',)
 
 admin.site.register(CustomUser, CustomUserAdmin)
+admin.site.register(TwoALoginSession)
+

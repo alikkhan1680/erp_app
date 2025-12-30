@@ -1,15 +1,10 @@
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from django.core.validators import RegexValidator
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-
 from accounts.models import CustomUser
 from accounts.utils import validate_password
-from .models import OTP
 from .utilits import verify_turnstile
+import secrets
 
 
 class RegisterOwnerSerializer(serializers.Serializer):
@@ -118,22 +113,44 @@ class LoginSerializer(serializers.Serializer):
 
 
 
-class TwoFAInitiateSerializers(serializers.Serializer):
-    qr_url = serializers.CharField(read_only=True)
-    secret = serializers.CharField(read_only=True)
-
-
-class TwoFAVerifySerializer(serializers.Serializer):
-    code = serializers.CharField()
-
-
-
 class RefreshTokenSerializers(serializers.Serializer):
     refresh = serializers.CharField(
         write_only=True,
         required=True,
         help_text="yaroqli refresh token"
     )
+
+
+
+class Enable2FASerializer(serializers.Serializer):
+    class Meta:
+        model = CustomUser
+        fields = ('is_2fa_enabled', 'two_fa_secret', 'backup_codes')
+
+    def update(self, instance, validated_data):
+        instance.is_2fa_enabled = True #2fani yoqamiz
+
+        import pyotp
+        instance.two_fa_secret = pyotp.random_base32() # secret codlar yaratish uchn ishlatamiz
+
+        recovery_codes = [secrets.token_hex(4) for _ in range(5)]
+        instance.backup_codes = recovery_codes
+
+        instance.save()
+        return instance
+
+
+class TwoFABackupVerifySerializer(serializers.Serializer):
+    session_id = serializers.UUIDField()
+    backup_code = serializers.CharField(max_length=100)
+
+
+
+class TwoFACodeVerifySerializer(serializers.Serializer):
+    session_id = serializers.UUIDField()
+    code = serializers.CharField(max_length=10)
+
+
 
 
 
