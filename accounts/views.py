@@ -1,13 +1,17 @@
+import datetime
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from auth_module.serializers import  RegisterOwnerSerializer
 from core.exceptions import BusinessException
 from .services import UserService, RoleService
 from core.messages.error import ERROR_MESSAGES
 from core.messages.success import SUCCESS_MESSAGES
+from rest_framework.permissions import IsAuthenticated
 
 
 class RegisterOwnerView(APIView):
@@ -50,10 +54,24 @@ class ChangeUserRoleView(APIView):
 
 
 class SessionTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
     def get(self, request):
-        remaining = request.session.get_expiry_age()  # session qolgan vaqti soniyada
-        print(remaining, "vaqt")
-        return Response(
-            {"session_remaining_seconds": remaining},
-            status=status.HTTP_200_OK
-        )
+        user = request.user
+        token = request.auth
+
+        if hasattr(token, 'payload'):
+            exp_timestamp = token.payload.get('exp')  # integer
+        else:
+            exp_timestamp = None
+
+        if exp_timestamp:
+            exp_datetime = datetime.datetime.fromtimestamp(exp_timestamp)
+        else:
+            exp_datetime = None
+
+        return Response({
+            "user": str(user),
+            "token_expires_at": exp_datetime,
+        })

@@ -65,6 +65,9 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 REST_FRAMEWORK = {
+    # 'DEFAULT_RENDERER_CLASSES': (
+    #     'rest_framework.renderers.JSONRenderer',
+    # ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -84,7 +87,7 @@ SIMPLE_JWT = {
 
 SESSION_COOKIE_AGE = 30 * 60  # Sessiya 30 daqiqa keyin tugashi (soniyada)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False # Sessiya brauzer yopilganda tugamasin
-SESSION_SAVE_EVERY_REQUEST = True # Sessiya serverda har so‘ngida yangilanadi (activity bo‘lsa)
+SESSION_SAVE_EVERY_REQUEST = False # Sessiya serverda har so‘ngida yangilanadi (activity bo‘lsa)
 
 
 MIDDLEWARE = [
@@ -178,6 +181,7 @@ TIME_ZONE = 'Asia/Tashkent'
 USE_I18N = True
 
 USE_TZ = True
+
 
 
 # Static files (CSS, JavaScript, Images)
