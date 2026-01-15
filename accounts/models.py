@@ -39,6 +39,21 @@ class CustomUser(AbstractUser):
 
     # optional: so‘nggi muvaffaqiyatli 2FA tekshiruvi
     last_2fa_verified_at = models.DateTimeField(null=True, blank=True)
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    def is_locked(self):
+        return self.locked_until and self.locked_until > timezone.now()
+
+    def lock_account(self, minutes=30):
+        self.locked_until = timezone.now() + timedelta(minutes=minutes)
+        self.save(update_fields=["locked_until"])
+
+    def reset_failed_attempts(self):
+        self.failed_login_attempts = 0
+        self.locked_until = None
+        self.save(update_fields=["failed_login_attempts", "locked_until"])
+
     def __str__(self):
         return self.username
 

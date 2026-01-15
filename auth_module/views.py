@@ -271,6 +271,16 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
+            user = serializer.get_user_if_exists()
+
+            if user:
+                user.failed_login_attempts +=1
+
+                if user.failed_login_attempts >=5:
+                    user.lock_account(minutes=30)
+                else:
+                    user.saev(update_fields=["failed_login_attempts"])
+
             return Response({
                 "message": ERROR_MESSAGES["LOGIN_CREDENTIALS_INCORRECT"]
             },status=status.HTTP_400_BAD_REQUEST)
