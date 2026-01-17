@@ -57,20 +57,19 @@ REST_FRAMEWORK = {
             "rest_framework.throttling.UserRateThrottle",
             "rest_framework.throttling.ScopedRateThrottle",
         ],
-    "DEFAULT_THROTTLE_RATES": {
-            "anon": "200/day",     # #  anon umumiy limit (istasam o'zgartiring yoki olib rashlashim mumkun)
-            "user": "1000/day",    # # ADDED: user umumiy limit (istasam  o'zgartiring yoki olib tashlayman)
+        "DEFAULT_THROTTLE_RATES": {
+            "anon": "200/d",
+            "user": "1000/d",
 
-            # scope-lar (asosiysi shular)
-            "signup": "3/hour",       #   register/signup uchun (tavsiya: 3/hour/IP)
-            "login": "5/15min",       #   login uchun
-            "otp_resend": "3/hour",   #   resend OTP uchun
-            "otp_verify": "5/15min",  #   OTP verify uchun
-            "twofa_verify": "5/5min", #   2FA verify uchun
-            "refresh": "20/15min",    #   refresh endpoint uchun (o'rtacha limit)
-            "enable_2fa": "10/hour",  #   2FA enable uchun (user-based bo'ladi)
-            "register_owner": "3/hour", # owner register uchun
-        },
+            "signup": "3/h",
+            "login": "5/m",
+            "otp_resend": "3/h",
+            "otp_verify": "5/m",
+            "twofa_verify": "5/m",
+            "refresh": "20/m",
+            "enable_2fa": "10/h",
+            "register_owner": "3/h",
+        }
 
 }
 
@@ -105,6 +104,7 @@ MIDDLEWARE = [
 
 
 ROOT_URLCONF = 'hr_erp.urls'
+APPEND_SLASH = os.getenv("DJANGO_APPEND_SLASH", "True") == "True"
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -181,18 +181,17 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# LOCAL / TEST SETTINGS
+SECURE_SSL_REDIRECT = False
 
-# Security / HTTPS settings
-SECURE_SSL_REDIRECT = True
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SECURE_PROXY_SSL_HEADER = None
 
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True

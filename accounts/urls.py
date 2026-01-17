@@ -6,5 +6,5 @@ from .views import ChangeUserRoleView, RegisterOwnerView, SessionTestAPIView
 urlpatterns = [
     path('user/<int:user_id>/change-role/', ChangeUserRoleView.as_view(), name="change_user_role"),
     path("signup-final/", RegisterOwnerView.as_view(), name="register-owner"),
-    path('session-test/', SessionTestAPIView.as_view(), name='session-test'),
+    path('session-tests/', SessionTestAPIView.as_view(), name='session-tests'),
 ]

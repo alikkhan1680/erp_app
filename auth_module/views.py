@@ -1,5 +1,4 @@
 import logging
-
 from django.conf import settings
 from django.db import IntegrityError, DataError, DatabaseError
 from drf_yasg.utils import swagger_auto_schema
@@ -120,7 +119,7 @@ class OTPVerifyView(APIView):
     permission_classes = [AllowAny]
 
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "auth_otp_verify"
+    throttle_scope = "otp_verify"
 
     @swagger_auto_schema(request_body=OTPVerifyserializers)
     def post(self, request):
@@ -135,7 +134,7 @@ class OTPVerifyView(APIView):
             otp_entry = OTP.objects.filter(phone_number=phone_number).first()
             if not otp_entry:
                 return Response({
-                    "status": "warning", "message": WARNING_MESSAGES["OTP_EXPIRED"]},
+                    "status": "error", "message": ERROR_MESSAGES["OTP_EXPIRED"]},
                      status=status.HTTP_400_BAD_REQUEST)
 
             if otp_entry.is_blocked:
@@ -253,7 +252,7 @@ class ResentOTPView(APIView):
         return Response(
             {
                 "status": "success",
-                "message": SUCCESS_MESSAGES["OTP_SENT"],
+                "message": SUCCESS_MESSAGES["PHONE_OTP_SENT"],
                 "expiry": "5 minutes"
             },
             status=status.HTTP_200_OK
@@ -279,7 +278,7 @@ class LoginView(APIView):
                 if user.failed_login_attempts >=5:
                     user.lock_account(minutes=30)
                 else:
-                    user.saev(update_fields=["failed_login_attempts"])
+                    user.save(update_fields=["failed_login_attempts"])
 
             return Response({
                 "message": ERROR_MESSAGES["LOGIN_CREDENTIALS_INCORRECT"]

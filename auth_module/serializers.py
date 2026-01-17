@@ -1,13 +1,10 @@
 import re
-
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from django.core.validators import RegexValidator
 from accounts.models import CustomUser
 from accounts.utils import validate_password
-from core.messages.error import ERROR_MESSAGES
 from .utilits import verify_turnstile
-import secrets
 
 class BaseUserInputSerializer(serializers.Serializer):
     full_name = serializers.CharField(
@@ -59,7 +56,7 @@ class SignupSerializer(BaseUserInputSerializer):
 
 
 
-class OTPVerifySerializer(serializers.Serializer):
+class OTPVerifyserializers(serializers.Serializer):
     primary_mobile = serializers.CharField(
         max_length=13,
         allow_blank=False,
@@ -82,6 +79,8 @@ class OTPVerifySerializer(serializers.Serializer):
             )
         ]
     )
+
+
 
 
 class ResentOTPSerializers(serializers.Serializer):
@@ -118,6 +117,18 @@ class LoginSerializer(serializers.Serializer):
         allow_blank=False,
         help_text="Cloudflare Turnstile token"
     )
+
+    def get_user_if_exists(self):
+        username_or_phone = self.initial_data.get("username_or_phone")
+        if not username_or_phone:
+            return None
+
+        if username_or_phone.startswith("+"):
+            return CustomUser.objects.filter(primary_mobile=username_or_phone).first()
+        elif "@" in username_or_phone:
+            return CustomUser.objects.filter(email=username_or_phone).first()
+        else:
+            return CustomUser.objects.filter(username=username_or_phone).first()
 
     def validate_username_or_phone(self, value):
         """
@@ -180,7 +191,7 @@ class LoginSerializer(serializers.Serializer):
 
 
 
-class RefreshTokenSerializer(serializers.Serializer):
+class RefreshTokenSerializers(serializers.Serializer):
     refresh = serializers.CharField(
         write_only=True,
         allow_blank=False,
